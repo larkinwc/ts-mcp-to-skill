@@ -68,7 +68,7 @@ When the user's request matches this skill's capabilities:
 
 \`\`\`bash
 cd $SKILL_DIR
-./executor --call 'YOUR_JSON_HERE'
+npx tsx executor.ts --call 'YOUR_JSON_HERE'
 \`\`\`
 
 IMPORTANT: Replace $SKILL_DIR with the actual discovered path of this skill directory.
@@ -79,7 +79,7 @@ If you need detailed information about a specific tool's parameters:
 
 \`\`\`bash
 cd $SKILL_DIR
-./executor --describe tool_name
+npx tsx executor.ts --describe tool_name
 \`\`\`
 
 This loads ONLY that tool's schema, not all tools.
@@ -97,14 +97,14 @@ Your workflow:
 
 \`\`\`bash
 cd $SKILL_DIR
-./executor --call '{"tool": "example_tool", "arguments": {"param1": "value"}}'
+npx tsx executor.ts --call '{"tool": "example_tool", "arguments": {"param1": "value"}}'
 \`\`\`
 
 ### Example 2: Get tool details first
 
 \`\`\`bash
 cd $SKILL_DIR
-./executor --describe example_tool
+npx tsx executor.ts --describe example_tool
 \`\`\`
 
 Returns the full schema, then you can generate the appropriate call.

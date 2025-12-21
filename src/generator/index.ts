@@ -1,35 +1,52 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
 import { introspectMCPServer } from '../mcp/client.js';
-import type { MCPServerConfig, MCPTool, CompileTarget } from '../mcp/types.js';
+import type { MCPServerConfig, MCPStdioConfig, MCPHttpConfig, MCPTool, ClaudeDesktopConfig } from '../mcp/types.js';
 import { generateSkillMd } from './skill-md.js';
 import { generateExecutorTs } from './executor.js';
 import { generatePackageJson } from './package-json.js';
 
-const execAsync = promisify(exec);
-
-interface CompileTargetInfo {
-  bunTarget: string;
-  outputName: string;
+/**
+ * Check if config is Claude Desktop format (has mcpServers wrapper)
+ */
+function isClaudeDesktopConfig(config: unknown): config is ClaudeDesktopConfig {
+  return typeof config === 'object' && config !== null && 'mcpServers' in config;
 }
 
-const COMPILE_TARGETS: Record<string, CompileTargetInfo> = {
-  'linux-x64': { bunTarget: 'bun-linux-x64', outputName: 'executor-linux-x64' },
-  'darwin-arm64': {
-    bunTarget: 'bun-darwin-arm64',
-    outputName: 'executor-darwin-arm64',
-  },
-  'darwin-x64': {
-    bunTarget: 'bun-darwin-x64',
-    outputName: 'executor-darwin-x64',
-  },
-  'windows-x64': {
-    bunTarget: 'bun-windows-x64',
-    outputName: 'executor-windows-x64.exe',
-  },
-};
+/**
+ * Parse config file and normalize to MCPServerConfig
+ */
+function parseConfig(rawConfig: unknown): MCPServerConfig {
+  if (isClaudeDesktopConfig(rawConfig)) {
+    // Claude Desktop format: { mcpServers: { "name": { ... } } }
+    const serverNames = Object.keys(rawConfig.mcpServers);
+    if (serverNames.length === 0) {
+      throw new Error('No MCP servers found in config');
+    }
+    if (serverNames.length > 1) {
+      console.warn(`Multiple servers found: ${serverNames.join(', ')}. Using first: ${serverNames[0]}`);
+    }
+    const serverName = serverNames[0];
+    const serverConfig = rawConfig.mcpServers[serverName];
+    return {
+      name: serverName,
+      ...serverConfig,
+    } as MCPServerConfig;
+  }
+
+  // Direct format: { name, command, ... } or { name, url, ... }
+  return rawConfig as MCPServerConfig;
+}
+
+/**
+ * Get display string for server (command or URL)
+ */
+function getServerDisplay(config: MCPServerConfig): string {
+  if ('url' in config) {
+    return (config as MCPHttpConfig).url;
+  }
+  return (config as MCPStdioConfig).command ?? 'unknown';
+}
 
 /**
  * Main generator class that converts MCP server to Claude Skill.
@@ -38,18 +55,17 @@ export class MCPSkillGenerator {
   private configPath: string;
   private outputDir: string;
   private config: MCPServerConfig | null = null;
-  private target: CompileTarget;
 
-  constructor(configPath: string, outputDir: string, target: CompileTarget = 'current') {
+  constructor(configPath: string, outputDir: string) {
     this.configPath = path.resolve(configPath);
     this.outputDir = path.resolve(outputDir);
-    this.target = target;
   }
 
   async generate(): Promise<void> {
     // 1. Load and validate config
     const configContent = await fs.readFile(this.configPath, 'utf-8');
-    this.config = JSON.parse(configContent) as MCPServerConfig;
+    const rawConfig = JSON.parse(configContent);
+    this.config = parseConfig(rawConfig);
     const serverName = this.config.name ?? 'unnamed-mcp-server';
 
     console.log(`Generating skill for MCP server: ${serverName}`);
@@ -58,7 +74,7 @@ export class MCPSkillGenerator {
     await fs.mkdir(this.outputDir, { recursive: true });
 
     // 3. Introspect MCP server
-    console.log(`Introspecting MCP server: ${this.config.command}`);
+    console.log(`Introspecting MCP server: ${getServerDisplay(this.config)}`);
     let tools: MCPTool[];
     try {
       tools = await introspectMCPServer(this.config);
@@ -76,9 +92,6 @@ export class MCPSkillGenerator {
     await this.writeExecutorTs();
     await this.writeMcpConfig();
     await this.writePackageJson(serverName);
-
-    // 5. Compile executor
-    await this.compileExecutor();
 
     this.printSummary(serverName, tools.length);
   }
@@ -110,104 +123,22 @@ export class MCPSkillGenerator {
     console.log(`  Generated: package.json`);
   }
 
-  private async checkBunAvailable(): Promise<boolean> {
-    try {
-      await execAsync('bun --version');
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private async compileExecutor(): Promise<void> {
-    console.log('\nCompiling executor...');
-
-    // Check if Bun is available
-    const bunAvailable = await this.checkBunAvailable();
-    if (!bunAvailable) {
-      console.warn('\n  Warning: Bun is not installed. Skipping binary compilation.');
-      console.warn('  The executor.ts source file has been generated.');
-      console.warn('  To compile to a standalone binary, install Bun:');
-      console.warn('    curl -fsSL https://bun.sh/install | bash');
-      console.warn('  Then run in the output directory:');
-      console.warn('    bun build executor.ts --compile --outfile executor');
-      return;
-    }
-
-    const executorPath = path.join(this.outputDir, 'executor.ts');
-    const targets = this.getTargetsToCompile();
-
-    for (const [targetName, info] of Object.entries(targets)) {
-      const outputPath = path.join(this.outputDir, info.outputName);
-      const command = `bun build "${executorPath}" --compile --target=${info.bunTarget} --outfile "${outputPath}"`;
-
-      try {
-        console.log(`  Compiling for ${targetName}...`);
-        await execAsync(command, { cwd: this.outputDir });
-        console.log(`  Compiled: ${info.outputName}`);
-      } catch (error) {
-        console.error(
-          `  Error compiling for ${targetName}: ${error instanceof Error ? error.message : String(error)}`
-        );
-        throw error;
-      }
-    }
-  }
-
-  private getTargetsToCompile(): Record<string, CompileTargetInfo> {
-    if (this.target === 'all') {
-      return COMPILE_TARGETS;
-    }
-
-    if (this.target === 'current') {
-      const currentTarget = this.detectCurrentPlatform();
-      return {
-        [currentTarget]: {
-          ...COMPILE_TARGETS[currentTarget],
-          outputName: 'executor', // Use simple name for current platform
-        },
-      };
-    }
-
-    // Specific target
-    if (COMPILE_TARGETS[this.target]) {
-      return { [this.target]: COMPILE_TARGETS[this.target] };
-    }
-
-    throw new Error(`Unknown target: ${this.target}`);
-  }
-
-  private detectCurrentPlatform(): string {
-    const platform = process.platform;
-    const arch = process.arch;
-
-    if (platform === 'darwin') {
-      return arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
-    } else if (platform === 'linux') {
-      return 'linux-x64';
-    } else if (platform === 'win32') {
-      return 'windows-x64';
-    }
-
-    // Default to linux-x64
-    return 'linux-x64';
-  }
-
   private printSummary(serverName: string, toolCount: number): void {
     console.log('\n' + '='.repeat(60));
     console.log('Skill generation complete!');
     console.log('='.repeat(60));
     console.log(`\nGenerated files in: ${this.outputDir}`);
     console.log('  - SKILL.md (instructions for Claude)');
-    console.log('  - executor.ts (source code)');
-    console.log('  - executor (compiled binary)');
+    console.log('  - executor.ts (TypeScript executor)');
     console.log('  - mcp-config.json (MCP server configuration)');
-    console.log('  - package.json (for rebuilding)');
+    console.log('  - package.json (dependencies)');
 
     console.log(`\nTo use this skill:`);
-    console.log(`1. Copy to Claude skills directory:`);
+    console.log(`1. Install dependencies in the skill directory:`);
+    console.log(`   cd ${this.outputDir} && npm install`);
+    console.log(`\n2. Copy to Claude skills directory:`);
     console.log(`   cp -r ${this.outputDir} ~/.claude/skills/`);
-    console.log(`\n2. Claude will discover it automatically`);
+    console.log(`\n3. Claude will discover it automatically`);
 
     console.log(`\nContext savings:`);
     console.log(`  Before (MCP): All ${toolCount} tools preloaded (~${toolCount * 500} tokens)`);

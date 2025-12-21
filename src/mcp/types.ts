@@ -1,12 +1,36 @@
 /**
- * MCP Server Configuration
+ * MCP Server Configuration - Stdio transport
  */
-export interface MCPServerConfig {
+export interface MCPStdioConfig {
   name: string;
   description?: string;
+  type?: 'stdio';
   command: string;
   args?: string[];
   env?: Record<string, string>;
+}
+
+/**
+ * MCP Server Configuration - HTTP/SSE transport
+ */
+export interface MCPHttpConfig {
+  name: string;
+  description?: string;
+  type: 'http' | 'sse';
+  url: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Union type for all MCP server configurations
+ */
+export type MCPServerConfig = MCPStdioConfig | MCPHttpConfig;
+
+/**
+ * Claude Desktop config format wrapper
+ */
+export interface ClaudeDesktopConfig {
+  mcpServers: Record<string, Omit<MCPServerConfig, 'name'>>;
 }
 
 /**
@@ -19,21 +43,9 @@ export interface MCPTool {
 }
 
 /**
- * Target platform for compilation
- */
-export type CompileTarget =
-  | 'linux-x64'
-  | 'darwin-arm64'
-  | 'darwin-x64'
-  | 'windows-x64'
-  | 'all'
-  | 'current';
-
-/**
  * CLI Options
  */
 export interface CLIOptions {
   mcpConfig: string;
   outputDir: string;
-  target?: CompileTarget;
 }
