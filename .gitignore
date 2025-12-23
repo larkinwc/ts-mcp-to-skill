@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output (NOT ignored - needed for npx github: to work)
+# dist/
 
 # Test output
 test-output/
