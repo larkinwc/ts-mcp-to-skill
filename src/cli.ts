@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { MCPSkillGenerator } from './generator/index.js';
-import { MCPExecutor } from './executor/index.js';
+import { MCPSkillGenerator } from './generator';
+import { MCPExecutor } from './executor';
 
 export async function run(): Promise<void> {
   const program = new Command();

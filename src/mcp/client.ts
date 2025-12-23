@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { MCPServerConfig, MCPStdioConfig, MCPHttpConfig, MCPTool } from './types.js';
+import type { MCPServerConfig, MCPStdioConfig, MCPHttpConfig, MCPTool } from './types';
 
 /**
  * Type guard to check if config is HTTP-based

@@ -1,4 +1,4 @@
-import type { MCPTool } from '../mcp/types.js';
+import type { MCPTool } from '../mcp/types';
 
 /**
  * Map JSON Schema types to short type hints.

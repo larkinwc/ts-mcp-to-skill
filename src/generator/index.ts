@@ -1,9 +1,9 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { introspectMCPServer } from '../mcp/client.js';
-import type { MCPServerConfig, MCPStdioConfig, MCPHttpConfig, MCPTool, ClaudeDesktopConfig } from '../mcp/types.js';
-import { generateSkillMd } from './skill-md.js';
+import { introspectMCPServer } from '../mcp/client';
+import type { MCPServerConfig, MCPStdioConfig, MCPHttpConfig, MCPTool, ClaudeDesktopConfig } from '../mcp/types';
+import { generateSkillMd } from './skill-md';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
