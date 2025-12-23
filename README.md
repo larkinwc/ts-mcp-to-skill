@@ -1,5 +1,7 @@
 # mcp-to-skill
 
+[![npm](https://img.shields.io/npm/v/mcp-to-skill)](https://www.npmjs.com/package/mcp-to-skill)
+
 Convert MCP servers to Claude Skills. Save ~90% context tokens.
 
 ## Requirements
@@ -103,3 +105,6 @@ npx tsx src/index.ts exec --config mcp-config.json --describe tool_name
 npx tsx src/index.ts exec --config mcp-config.json --call '{"tool": "...", "arguments": {}}'
 ```
 
+## License
+
+MIT
